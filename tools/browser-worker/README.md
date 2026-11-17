@@ -7,10 +7,10 @@ profile stays in `~/.private-browser/chromium-profile`.
 
 ## Connect
 
-1. Sign in to Private Browser and choose **Connect this computer** to create a
+1. Sign in to Private Browser and choose **Generate pairing code** to create a
    one-time pairing code.
 2. Install Node.js 20 or later on the computer that should run Chromium.
-3. Download this `tools/browser-worker` folder to that computer.
+3. Copy the `tools/browser-worker` folder from the project to that computer.
 4. In the folder, run:
 
    ```sh
