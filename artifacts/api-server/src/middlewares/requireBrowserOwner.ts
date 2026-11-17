@@ -1,5 +1,8 @@
-import { clerkClient, getAuth } from "@clerk/express";
-import type { RequestHandler } from "express";
+import type { Request, RequestHandler } from "express";
+import {
+  BROWSER_SESSION_COOKIE,
+  passwordFingerprint,
+} from "../lib/authSession";
 
 function normalizedHost(value: string): string {
   try {
@@ -9,47 +12,57 @@ function normalizedHost(value: string): string {
   }
 }
 
-export const requireBrowserOwner: RequestHandler = async (req, res, next) => {
+export function isSameOriginRequest(req: Request): boolean {
   const origin = req.get("origin");
   if (req.get("sec-fetch-site") === "cross-site") {
+    return false;
+  }
+
+  if (!origin) return true;
+
+  try {
+    const originHost = new URL(origin).host.toLowerCase();
+    const forwardedHost = req
+      .get("x-forwarded-host")
+      ?.split(",")[0]
+      ?.trim()
+      .toLowerCase();
+    const requestHost = normalizedHost(forwardedHost || req.get("host") || "");
+    const configuredHosts = [
+      ...(process.env.REPLIT_DOMAINS?.split(",") ?? []),
+      process.env.REPLIT_DEV_DOMAIN,
+    ]
+      .filter((host): host is string => Boolean(host))
+      .map(normalizedHost);
+
+    return (
+      originHost === requestHost ||
+      configuredHosts.some((host) => originHost === host)
+    );
+  } catch {
+    return false;
+  }
+}
+
+export const requireBrowserOwner: RequestHandler = (req, res, next) => {
+  if (!isSameOriginRequest(req)) {
     res.status(403).json({ error: "Cross-origin requests are not allowed." });
     return;
   }
 
-  if (origin) {
-    try {
-      const originHost = new URL(origin).host.toLowerCase();
-      const forwardedHost = req
-        .get("x-forwarded-host")
-        ?.split(",")[0]
-        ?.trim()
-        .toLowerCase();
-      const requestHost = normalizedHost(
-        forwardedHost || req.get("host") || "",
-      );
-      const configuredHosts = [
-        ...(process.env.REPLIT_DOMAINS?.split(",") ?? []),
-        process.env.REPLIT_DEV_DOMAIN,
-      ]
-        .filter((host): host is string => Boolean(host))
-        .map(normalizedHost);
-
-      if (
-        originHost !== requestHost &&
-        !configuredHosts.some((host) => originHost === host)
-      ) {
-        res.status(403).json({ error: "Cross-origin requests are not allowed." });
-        return;
-      }
-    } catch {
-      res.status(403).json({ error: "Invalid request origin." });
-      return;
-    }
-  }
-
-  const { userId } = getAuth(req);
-
-  if (!userId) {
+  const sessionValue = req.signedCookies?.[BROWSER_SESSION_COOKIE];
+  const [expiresAtText, sessionPasswordFingerprint, extraValue] =
+    typeof sessionValue === "string" ? sessionValue.split(".") : [];
+  const sessionExpiresAt = Number(expiresAtText);
+  const currentPassword = process.env.BROWSER_OWNER_PASSWORD;
+  if (
+    extraValue !== undefined ||
+    !Number.isSafeInteger(sessionExpiresAt) ||
+    sessionExpiresAt <= Date.now() ||
+    !currentPassword ||
+    currentPassword.length < 12 ||
+    sessionPasswordFingerprint !== passwordFingerprint(currentPassword)
+  ) {
     res.status(401).json({ error: "Sign in is required." });
     return;
   }
@@ -61,21 +74,6 @@ export const requireBrowserOwner: RequestHandler = async (req, res, next) => {
     return;
   }
 
-  try {
-    const user = await clerkClient.users.getUser(userId);
-    const primaryEmail = user.primaryEmailAddress?.emailAddress
-      ?.trim()
-      .toLowerCase();
-
-    if (!primaryEmail || primaryEmail !== allowedEmail) {
-      res.status(403).json({ error: "This account is not authorized." });
-      return;
-    }
-
-    res.locals.browserOwnerId = userId;
-    next();
-  } catch (error) {
-    req.log.error({ err: error }, "Could not verify the browser owner.");
-    res.status(503).json({ error: "Could not verify the browser owner." });
-  }
+  res.locals.browserOwnerId = allowedEmail;
+  next();
 };

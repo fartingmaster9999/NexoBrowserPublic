@@ -1,8 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent, type MouseEvent, type WheelEvent } from 'react';
 import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
-import { ClerkProvider, SignUp, useAuth, useClerk, useSignIn } from '@clerk/react';
-import { publishableKeyFromHost } from '@clerk/react/internal';
-import { shadcn } from '@clerk/themes';
 import {
   ArrowLeft, ArrowRight, ArrowUpRight, Check, Copy,
   Globe2, KeyRound, LoaderCircle, LockKeyhole, Monitor,
@@ -21,62 +18,6 @@ import NotFound from '@/pages/not-found';
 
 const queryClient = new QueryClient();
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
-const clerkPubKey = publishableKeyFromHost(window.location.hostname, import.meta.env.VITE_CLERK_PUBLISHABLE_KEY);
-const clerkProxyUrl = import.meta.env.VITE_CLERK_PROXY_URL;
-
-function stripBase(path: string) {
-  return basePath && path.startsWith(basePath) ? path.slice(basePath.length) || '/' : path;
-}
-
-const appearance = {
-  theme: shadcn,
-  cssLayerName: 'clerk',
-  options: {
-    logoPlacement: 'inside' as const,
-    logoLinkUrl: basePath || '/',
-    logoImageUrl: `${window.location.origin}${basePath}/logo.svg`,
-  },
-  variables: {
-    colorPrimary: '#d5d9dc',
-    colorForeground: '#e8ecef',
-    colorMutedForeground: '#9ba4aa',
-    colorDanger: '#f08b83',
-    colorBackground: '#111416',
-    colorInput: '#171b1e',
-    colorInputForeground: '#e8ecef',
-    colorNeutral: '#e8ecef',
-    fontFamily: 'ui-sans-serif, system-ui, sans-serif',
-    borderRadius: '0.5rem',
-  },
-  elements: {
-    rootBox: 'w-full flex justify-center',
-    cardBox: 'bg-[#111416] rounded-lg w-[440px] max-w-full overflow-hidden border border-[#292e32]',
-    card: '!shadow-none !border-0 !bg-transparent !rounded-none',
-    footer: '!shadow-none !border-0 !bg-transparent !rounded-none',
-    headerTitle: 'text-[#e8ecef] font-medium',
-    headerSubtitle: 'text-[#9ba4aa]',
-    socialButtonsBlock: 'hidden',
-    socialButtonsBlockButton: 'hidden',
-    dividerRow: 'hidden',
-    formFieldLabel: 'text-[#d5d9dc]',
-    footerActionLink: 'text-[#e8ecef]',
-    footerActionText: 'text-[#9ba4aa]',
-    dividerText: 'text-[#9ba4aa]',
-    identityPreviewEditButton: 'text-[#e8ecef]',
-    formFieldSuccessText: 'text-[#9ba4aa]',
-    alertText: 'text-[#e8ecef]',
-    logoBox: 'rounded-md',
-    logoImage: 'rounded-md',
-    formButtonPrimary: 'bg-[#d5d9dc] hover:bg-[#c3c9cd] text-[#111416]',
-    formFieldInput: 'bg-[#171b1e] border-[#30363a] text-[#e8ecef]',
-    footerAction: 'text-[#9ba4aa]',
-    dividerLine: 'bg-[#30363a]',
-    alert: 'border-[#583937] bg-[#211716]',
-    otpCodeFieldInput: 'bg-[#171b1e] border-[#30363a]',
-    formFieldRow: 'text-[#d5d9dc]',
-    main: 'text-[#e8ecef]',
-  },
-};
 
 function Mark({ small = false }: { small?: boolean }) {
   return (
@@ -86,39 +27,64 @@ function Mark({ small = false }: { small?: boolean }) {
   );
 }
 
+type BrowserAuthStatus = 'loading' | 'signed-in' | 'signed-out';
+
+function useBrowserAuth(): BrowserAuthStatus {
+  const [status, setStatus] = useState<BrowserAuthStatus>('loading');
+
+  useEffect(() => {
+    let active = true;
+    fetch(`${basePath}/api/auth/session`, { credentials: 'same-origin' })
+      .then((response) => {
+        if (active) setStatus(response.ok ? 'signed-in' : 'signed-out');
+      })
+      .catch(() => {
+        if (active) setStatus('signed-out');
+      });
+    return () => { active = false; };
+  }, []);
+
+  return status;
+}
+
 function Home() {
-  const { isLoaded, isSignedIn } = useAuth();
-  if (!isLoaded) return <div className="min-h-[100dvh] bg-[#0b0d0f]" data-testid="auth-loading" />;
-  if (isLoaded && isSignedIn) return <Redirect to="/browser" />;
+  const authStatus = useBrowserAuth();
+  if (authStatus === 'loading') return <div className="min-h-[100dvh] bg-[#0b0d0f]" data-testid="auth-loading" />;
+  if (authStatus === 'signed-in') return <Redirect to="/browser" />;
   return <AuthPage />;
 }
 
 function PasswordSignIn() {
-  const { signIn, fetchStatus } = useSignIn();
   const [, setLocation] = useLocation();
+  const client = useQueryClient();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
-  const busy = fetchStatus === 'fetching';
+  const [busy, setBusy] = useState(false);
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError('');
+    setBusy(true);
     try {
-      const result = await signIn.password({ emailAddress: email.trim(), password });
-      if (result.error) {
-        setError(result.error.message || 'Sign-in failed. Check your details and try again.');
+      const response = await fetch(`${basePath}/api/auth/login`, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.trim(), password }),
+      });
+      if (!response.ok) {
+        const result = await response.json().catch(() => null) as { error?: string } | null;
+        setError(result?.error || (response.status === 401 ? 'Invalid email or password.' : 'Sign-in failed. Try again.'));
         return;
       }
-      if (signIn.status === 'complete') {
-        await signIn.finalize({
-          navigate: ({ decorateUrl }) => setLocation(stripBase(decorateUrl(`${basePath}/browser`))),
-        });
-        return;
-      }
-      setError('This account needs an additional verification step. Contact the browser owner.');
+      setPassword('');
+      client.clear();
+      setLocation('/browser');
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Sign-in failed. Try again.');
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -175,22 +141,6 @@ function AuthPage() {
         <p className="mt-1 text-sm text-[#9ba4aa]">Use the email and password for your owner account.</p>
         <PasswordSignIn />
         <p className="mt-8 flex items-center gap-2 text-xs text-[#828c92]"><ShieldCheck size={14} /> Access is limited to the approved account.</p>
-      </div>
-    </main>
-  );
-}
-
-function AccountSetupPage() {
-  return (
-    <main className="min-h-[100dvh] bg-[#0b0d0f] px-5 text-[#e8ecef]">
-      <div className="mx-auto flex min-h-[100dvh] w-full max-w-[440px] flex-col justify-center py-10">
-        <a href="/" className="mb-8 flex items-center gap-2.5 text-sm font-medium" data-testid="link-setup-home"><Mark small /> Private Browser</a>
-        <p className="mb-2 text-xs text-[#9ba4aa]">Temporary account setup</p>
-        <h1 className="text-xl font-medium tracking-tight">Create your account</h1>
-        <p className="mt-1 text-sm leading-6 text-[#9ba4aa]">Use the approved email for this private browser. This setup page is not linked from the login screen.</p>
-        <div className="mt-6 rounded-lg border border-[#292e32] bg-[#111416] p-3">
-          <SignUp routing="path" path={`${basePath}/sign-up`} signInUrl={`${basePath}/sign-in`} />
-        </div>
       </div>
     </main>
   );
@@ -385,54 +335,65 @@ function BrowserPage() {
 }
 
 function SignOutButton() {
-  const { signOut } = useClerk();
-  return <button type="button" onClick={() => signOut({ redirectUrl: basePath || '/' })} className="focus-ring rounded border border-[#30363a] px-3 py-1.5 text-xs font-medium text-[#aeb6bb] hover:bg-[#171b1e]" data-testid="button-sign-out">Sign out</button>;
+  const [, setLocation] = useLocation();
+  const client = useQueryClient();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  const signOut = async () => {
+    setBusy(true);
+    setError('');
+    try {
+      const response = await fetch(`${basePath}/api/auth/logout`, {
+        method: 'POST',
+        credentials: 'same-origin',
+      });
+      if (!response.ok) throw new Error('Could not sign out. Try again.');
+      client.clear();
+      setLocation('/');
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Could not sign out. Try again.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="flex items-center gap-2">
+      {error && <span className="text-xs text-[#f08b83]" role="alert">{error}</span>}
+      <button type="button" onClick={signOut} disabled={busy} className="focus-ring rounded border border-[#30363a] px-3 py-1.5 text-xs font-medium text-[#aeb6bb] hover:bg-[#171b1e] disabled:opacity-60" data-testid="button-sign-out">
+        {busy ? 'Signing out…' : 'Sign out'}
+      </button>
+    </div>
+  );
 }
 
 function ProtectedBrowser() {
-  const { isLoaded, isSignedIn } = useAuth();
-  if (!isLoaded) return <div className="min-h-[100dvh] animate-pulse bg-[#0b0d0f]" data-testid="auth-loading" />;
-  return isSignedIn ? <BrowserPage /> : <Redirect to="/" />;
+  const authStatus = useBrowserAuth();
+  if (authStatus === 'loading') return <div className="min-h-[100dvh] animate-pulse bg-[#0b0d0f]" data-testid="auth-loading" />;
+  return authStatus === 'signed-in' ? <BrowserPage /> : <Redirect to="/" />;
 }
 
-function ClerkQueryClientCacheInvalidator() {
-  const { addListener } = useClerk();
-  const client = useQueryClient();
-  const prevUserId = useRef<string | null | undefined>(undefined);
-  useEffect(() => addListener(({ user }) => {
-    const userId = user?.id ?? null;
-    if (prevUserId.current !== undefined && prevUserId.current !== userId) client.clear();
-    prevUserId.current = userId;
-  }), [addListener, client]);
-  return null;
-}
-
-function ClerkRouter() {
-  const [, setLocation] = useLocation();
+function AppRoutes() {
   return (
-    <ClerkProvider publishableKey={clerkPubKey} proxyUrl={clerkProxyUrl} appearance={appearance} signInUrl={`${basePath}/sign-in`} signUpUrl={`${basePath}/sign-up`}
-      localization={{
-        signIn: { start: { title: 'Welcome back', subtitle: 'Sign in to open your private browser' } },
-        signUp: { start: { title: 'Create your account', subtitle: 'Set up your private browser account' } },
-      }}
-      routerPush={(to) => setLocation(stripBase(to))} routerReplace={(to) => setLocation(stripBase(to), { replace: true })}>
-      <QueryClientProvider client={queryClient}>
-        <ClerkQueryClientCacheInvalidator />
-        <Switch>
-          <Route path="/" component={Home} />
-          <Route path="/browser" component={ProtectedBrowser} />
-          <Route path="/sign-in/*?" component={AuthPage} />
-          <Route path="/sign-up/*?" component={AccountSetupPage} />
-          <Route component={NotFound} />
-        </Switch>
-      </QueryClientProvider>
-    </ClerkProvider>
+    <Switch>
+      <Route path="/" component={Home} />
+      <Route path="/browser" component={ProtectedBrowser} />
+      <Route path="/sign-in/*?" component={AuthPage} />
+      <Route path="/sign-up/*?" component={() => <Redirect to="/" />} />
+      <Route component={NotFound} />
+    </Switch>
   );
 }
 
 function App() {
-  if (!clerkPubKey) throw new Error('Missing VITE_CLERK_PUBLISHABLE_KEY in environment.');
-  return <WouterRouter base={basePath}><ClerkRouter /></WouterRouter>;
+  return (
+    <WouterRouter base={basePath}>
+      <QueryClientProvider client={queryClient}>
+        <AppRoutes />
+      </QueryClientProvider>
+    </WouterRouter>
+  );
 }
 
 export default App;
