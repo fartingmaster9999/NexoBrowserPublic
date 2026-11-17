@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent, type MouseEvent, type WheelEvent } from 'react';
 import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
-import { ClerkProvider, useAuth, useClerk, useSignIn } from '@clerk/react';
+import { ClerkProvider, SignUp, useAuth, useClerk, useSignIn } from '@clerk/react';
 import { publishableKeyFromHost } from '@clerk/react/internal';
 import { shadcn } from '@clerk/themes';
 import {
@@ -175,6 +175,22 @@ function AuthPage() {
         <p className="mt-1 text-sm text-[#9ba4aa]">Use the email and password for your owner account.</p>
         <PasswordSignIn />
         <p className="mt-8 flex items-center gap-2 text-xs text-[#828c92]"><ShieldCheck size={14} /> Access is limited to the approved account.</p>
+      </div>
+    </main>
+  );
+}
+
+function AccountSetupPage() {
+  return (
+    <main className="min-h-[100dvh] bg-[#0b0d0f] px-5 text-[#e8ecef]">
+      <div className="mx-auto flex min-h-[100dvh] w-full max-w-[440px] flex-col justify-center py-10">
+        <a href="/" className="mb-8 flex items-center gap-2.5 text-sm font-medium" data-testid="link-setup-home"><Mark small /> Private Browser</a>
+        <p className="mb-2 text-xs text-[#9ba4aa]">Temporary account setup</p>
+        <h1 className="text-xl font-medium tracking-tight">Create your account</h1>
+        <p className="mt-1 text-sm leading-6 text-[#9ba4aa]">Use the approved email for this private browser. This setup page is not linked from the login screen.</p>
+        <div className="mt-6 rounded-lg border border-[#292e32] bg-[#111416] p-3">
+          <SignUp routing="path" path={`${basePath}/sign-up`} signInUrl={`${basePath}/sign-in`} />
+        </div>
       </div>
     </main>
   );
@@ -394,8 +410,11 @@ function ClerkQueryClientCacheInvalidator() {
 function ClerkRouter() {
   const [, setLocation] = useLocation();
   return (
-    <ClerkProvider publishableKey={clerkPubKey} proxyUrl={clerkProxyUrl} appearance={appearance} signInUrl={`${basePath}/sign-in`}
-      localization={{ signIn: { start: { title: 'Welcome back', subtitle: 'Sign in to open your private browser' } } }}
+    <ClerkProvider publishableKey={clerkPubKey} proxyUrl={clerkProxyUrl} appearance={appearance} signInUrl={`${basePath}/sign-in`} signUpUrl={`${basePath}/sign-up`}
+      localization={{
+        signIn: { start: { title: 'Welcome back', subtitle: 'Sign in to open your private browser' } },
+        signUp: { start: { title: 'Create your account', subtitle: 'Set up your private browser account' } },
+      }}
       routerPush={(to) => setLocation(stripBase(to))} routerReplace={(to) => setLocation(stripBase(to), { replace: true })}>
       <QueryClientProvider client={queryClient}>
         <ClerkQueryClientCacheInvalidator />
@@ -403,7 +422,7 @@ function ClerkRouter() {
           <Route path="/" component={Home} />
           <Route path="/browser" component={ProtectedBrowser} />
           <Route path="/sign-in/*?" component={AuthPage} />
-          <Route path="/sign-up/*?" component={() => <Redirect to="/sign-in" />} />
+          <Route path="/sign-up/*?" component={AccountSetupPage} />
           <Route component={NotFound} />
         </Switch>
       </QueryClientProvider>
