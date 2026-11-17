@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "Private Browser"
+description = "A personal remote browser that connects to an authenticated Chromium session running on the user’s own computer."
+version = "1.0.0"
+id = "artifacts/remote-browser"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 23885
+
+[services.development]
+run = "pnpm --filter @workspace/remote-browser run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/remote-browser", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/remote-browser/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "23885"
+BASE_PATH = "/"
