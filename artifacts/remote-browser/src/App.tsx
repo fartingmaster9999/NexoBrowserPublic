@@ -282,6 +282,12 @@ function BrowserPage() {
   };
   const createPairing = () => pairing.mutate(undefined);
   const startViewer = () => viewerTicket.mutate(undefined);
+  const openViewer = () => {
+    setNavigationError('');
+    setFrame(null);
+    viewerTicket.reset();
+    startViewer();
+  };
   const stop = () => stopSession.mutate(undefined, {
     onSuccess: () => {
       socket?.close();
@@ -314,9 +320,9 @@ function BrowserPage() {
               <input aria-label="Search or enter a website address" data-testid="input-browser-url" value={urlInput} onChange={(event) => { setUrlInput(event.target.value); setNavigationError(''); }} placeholder="Search or enter a URL" className="h-9 w-full bg-transparent px-2 text-sm text-[#e8ecef] outline-none placeholder:text-[#737d83]" />
               <button className="focus-ring rounded p-1.5 text-[#c5cbd0] hover:bg-[#202529] disabled:opacity-35" disabled={!urlInput.trim()} aria-label="Search or go to address" data-testid="button-browser-navigate"><ArrowUpRight size={15} /></button>
             </form>
-            {connected && socketState !== 'connected' && <button type="button" onClick={() => { viewerTicket.reset(); startViewer(); }} disabled={viewerTicket.isPending || socketState === 'connecting'} className="focus-ring inline-flex h-9 items-center gap-2 rounded-md bg-[#d5d9dc] px-3 text-xs font-medium text-[#111416] hover:bg-[#c3c9cd] disabled:opacity-50" data-testid="button-open-browser">
+            {connected && frame && socketState !== 'connected' && <button type="button" onClick={openViewer} disabled={viewerTicket.isPending || socketState === 'connecting'} className="focus-ring inline-flex h-9 items-center gap-2 rounded-md bg-[#d5d9dc] px-3 text-xs font-medium text-[#111416] hover:bg-[#c3c9cd] disabled:opacity-50" data-testid="button-open-browser">
               {viewerTicket.isPending || socketState === 'connecting' ? <LoaderCircle size={14} className="animate-spin" /> : <Play size={13} />}
-              {browserOpen ? 'Reconnect' : 'Open browser'}
+              Reconnect
             </button>}
             {browserOpen && <button type="button" onClick={stop} disabled={stopSession.isPending} className="focus-ring inline-flex h-9 items-center gap-2 rounded-md border border-[#454043] px-3 text-xs font-medium text-[#d2a6a3] hover:bg-[#21191a] disabled:opacity-50" data-testid="button-stop-session"><Square size={12} /> Stop</button>}
           </div>
@@ -361,9 +367,26 @@ function BrowserPage() {
                 }} />
             </div> : <div className="flex flex-col items-center px-6 text-center" data-testid="browser-empty-view">
               {socketState === 'connecting' || viewerTicket.isPending ? <LoaderCircle size={20} className="animate-spin text-[#aeb6bb]" /> : <Globe2 size={20} className="text-[#aeb6bb]" />}
-              <h2 className="mt-3 text-sm font-medium">{socketState === 'connecting' || viewerTicket.isPending ? 'Opening browser…' : 'Computer connected'}</h2>
-              <p className="mt-1 text-sm text-[#9ba4aa]">{socketState === 'error' ? 'The browser connection could not be opened.' : 'Open the browser session to begin.'}</p>
-              {socketState === 'error' && <button type="button" onClick={startViewer} className="focus-ring mt-4 rounded-md border border-[#343a3f] px-3 py-2 text-sm hover:bg-[#171b1e]" data-testid="button-retry-viewer">Reconnect</button>}
+              <h2 className="mt-3 text-sm font-medium">
+                {socketState === 'connecting' || viewerTicket.isPending
+                  ? 'Opening browser…'
+                  : socketState === 'connected'
+                    ? 'Connected, waiting for browser view'
+                    : 'Computer connected'}
+              </h2>
+              <p className="mt-1 text-sm text-[#9ba4aa]">
+                {socketState === 'error'
+                  ? 'The browser view could not be opened. Try reconnecting.'
+                  : socketState === 'connected'
+                    ? 'No screenshot has arrived yet. Check the worker terminal, then retry.'
+                    : 'Open the browser session to begin.'}
+              </p>
+              {connected && socketState !== 'connecting' && !viewerTicket.isPending && (
+                <button type="button" onClick={openViewer} className="focus-ring mt-4 inline-flex items-center gap-2 rounded-md bg-[#d5d9dc] px-4 py-2 text-sm font-medium text-[#111416] hover:bg-[#c3c9cd]" data-testid="button-open-browser">
+                  <Play size={14} />
+                  {socketState === 'connected' ? 'Retry browser view' : socketState === 'error' ? 'Reconnect' : 'Open browser'}
+                </button>
+              )}
             </div>}
           </div>
           <div className="flex min-h-9 items-center justify-between gap-3 border-t border-[#292e32] px-3 text-xs text-[#828c92]">
