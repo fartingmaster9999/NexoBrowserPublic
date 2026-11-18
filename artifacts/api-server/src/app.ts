@@ -1,4 +1,6 @@
 import express, { type Express } from "express";
+import { existsSync } from "node:fs";
+import { join, resolve } from "node:path";
 import cors from "cors";
 import pinoHttp from "pino-http";
 import cookieParser from "cookie-parser";
@@ -38,5 +40,30 @@ app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser(sessionSecret));
 
 app.use("/api", router);
+
+const webRoot = [
+  resolve(process.cwd(), "artifacts/remote-browser/dist/public"),
+  resolve(process.cwd(), "../remote-browser/dist/public"),
+].find(existsSync);
+
+if (!webRoot && process.env.NODE_ENV === "production") {
+  throw new Error(
+    "The browser website build is missing; build the web artifact before starting the API server.",
+  );
+}
+
+if (webRoot) {
+  app.use(express.static(webRoot));
+  app.use((req, res, next) => {
+    if (req.path === "/api" || req.path.startsWith("/api/")) {
+      next();
+      return;
+    }
+
+    res.sendFile(join(webRoot, "index.html"), (error) => {
+      if (error) next(error);
+    });
+  });
+}
 
 export default app;

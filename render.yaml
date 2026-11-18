@@ -1,0 +1,28 @@
+services:
+  - type: web
+    name: private-browser
+    runtime: node
+    plan: free
+    buildCommand: >-
+      corepack enable &&
+      corepack prepare pnpm@10.26.1 --activate &&
+      pnpm install --frozen-lockfile &&
+      PORT=10000 BASE_PATH=/ NODE_ENV=production pnpm --filter @workspace/remote-browser run build &&
+      pnpm --filter @workspace/api-server run build
+    startCommand: node --enable-source-maps artifacts/api-server/dist/index.mjs
+    healthCheckPath: /api/healthz
+    envVars:
+      - key: NODE_VERSION
+        value: 24.22.1
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "10000"
+      - key: BASE_PATH
+        value: /
+      - key: BROWSER_OWNER_EMAIL
+        sync: false
+      - key: BROWSER_OWNER_PASSWORD
+        sync: false
+      - key: SESSION_SECRET
+        sync: false
