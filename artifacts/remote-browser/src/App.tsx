@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
 import {
-  Globe2, LoaderCircle, LockKeyhole, Monitor, Play, ShieldCheck, WifiOff,
+  Globe2, LoaderCircle, Monitor, Play, ShieldCheck, WifiOff,
 } from 'lucide-react';
 import { Redirect, Route, Switch, useLocation, Router as WouterRouter } from 'wouter';
 import {
@@ -29,8 +29,8 @@ const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
 
 function Mark({ small = false }: { small?: boolean }) {
   return (
-    <span className={`inline-flex items-center justify-center rounded-md bg-[#202529] text-[#d5d9dc] ${small ? 'h-8 w-8' : 'h-9 w-9'}`} aria-hidden="true">
-      <LockKeyhole size={small ? 15 : 18} strokeWidth={1.7} />
+    <span className={`inline-flex shrink-0 items-center justify-center ${small ? 'h-8 w-8' : 'h-9 w-9'}`} aria-hidden="true">
+      <img src="/brand-logo.png" alt="" className="h-full w-full object-contain" />
     </span>
   );
 }
