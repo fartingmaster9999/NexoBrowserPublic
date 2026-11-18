@@ -4,11 +4,9 @@ services:
     runtime: node
     plan: free
     buildCommand: >-
-      corepack enable &&
-      corepack prepare pnpm@10.26.1 --activate &&
-      pnpm install --frozen-lockfile &&
-      PORT=10000 BASE_PATH=/ NODE_ENV=production pnpm --filter @workspace/remote-browser run build &&
-      pnpm --filter @workspace/api-server run build
+      corepack pnpm@10.26.1 install --frozen-lockfile &&
+      PORT=10000 BASE_PATH=/ NODE_ENV=production corepack pnpm@10.26.1 --filter @workspace/remote-browser run build &&
+      corepack pnpm@10.26.1 --filter @workspace/api-server run build
     startCommand: node --enable-source-maps artifacts/api-server/dist/index.mjs
     healthCheckPath: /api/healthz
     envVars:
