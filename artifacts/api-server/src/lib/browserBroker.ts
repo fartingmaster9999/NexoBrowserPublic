@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 import type { IncomingMessage, Server } from "node:http";
 import { URL } from "node:url";
 import { WebSocket, WebSocketServer, type RawData } from "ws";
+import { logger } from "./logger";
 
 const SOCKET_PATH = "/api/browser/ws";
 const PAIRING_TTL_MS = 5 * 60 * 1000;
@@ -292,8 +293,9 @@ function handleWorkerSocket(socket: WebSocket, ownerId: string): void {
     }
   });
 
-  socket.on("close", () => {
+  socket.on("close", (code) => {
     if (sessions.get(ownerId) !== session) return;
+    logger.warn({ role: "worker", code }, "Browser WebSocket closed");
     sessions.delete(ownerId);
     session.status.deviceConnected = false;
     session.status.browserOpen = false;
@@ -326,7 +328,8 @@ function handleViewerSocket(socket: WebSocket, ownerId: string): void {
     }
   });
 
-  socket.on("close", () => {
+  socket.on("close", (code) => {
+    logger.info({ role: "viewer", code }, "Browser WebSocket closed");
     if (session.viewer === socket) {
       session.viewer = undefined;
       if (session.worker.readyState === WebSocket.OPEN) {
@@ -345,48 +348,77 @@ export function attachBrowserWebSocket(server: Server): void {
 
   server.on("upgrade", (request: IncomingMessage, socket, head) => {
     const requestUrl = new URL(request.url ?? "/", "http://localhost");
-    if (requestUrl.pathname !== SOCKET_PATH) {
-      socket.write("HTTP/1.1 404 Not Found\r\n\r\n");
+    const role = requestUrl.searchParams.get("role");
+    const originHost = (() => {
+      try {
+        return request.headers.origin
+          ? new URL(request.headers.origin).host
+          : null;
+      } catch {
+        return "invalid";
+      }
+    })();
+    const rejectUpgrade = (status: number, reason: string): void => {
+      logger.warn(
+        {
+          role,
+          status,
+          reason,
+          requestHost: request.headers.host ?? null,
+          forwardedHost: Array.isArray(request.headers["x-forwarded-host"])
+            ? request.headers["x-forwarded-host"][0]
+            : request.headers["x-forwarded-host"]?.split(",")[0]?.trim() ?? null,
+          originHost,
+        },
+        "Browser WebSocket upgrade rejected",
+      );
+      const message =
+        status === 401
+          ? "Unauthorized"
+          : status === 403
+            ? "Forbidden"
+            : "Not Found";
+      socket.write(`HTTP/1.1 ${status} ${message}\r\n\r\n`);
       socket.destroy();
+    };
+
+    if (requestUrl.pathname !== SOCKET_PATH) {
+      rejectUpgrade(404, "unexpected_path");
       return;
     }
 
     cleanExpiredEntries();
-    const role = requestUrl.searchParams.get("role");
     let ownerId: string | undefined;
 
     if (role === "worker") {
       const code = requestUrl.searchParams.get("code")?.toUpperCase();
       const pairing = code ? pairings.get(code) : undefined;
       if (!code || !pairing || pairing.expiresAt <= Date.now()) {
-        socket.write("HTTP/1.1 401 Unauthorized\r\n\r\n");
-        socket.destroy();
+        rejectUpgrade(401, "pairing_missing_expired_or_already_used");
         return;
       }
       pairings.delete(code);
       ownerId = pairing.ownerId;
     } else if (role === "viewer") {
       if (!isAllowedViewerOrigin(request)) {
-        socket.write("HTTP/1.1 403 Forbidden\r\n\r\n");
-        socket.destroy();
+        rejectUpgrade(403, "viewer_origin_not_allowed");
         return;
       }
       const ticket = requestUrl.searchParams.get("ticket");
       const record = ticket ? viewerTickets.get(ticket) : undefined;
       if (!ticket || !record || record.expiresAt <= Date.now()) {
-        socket.write("HTTP/1.1 401 Unauthorized\r\n\r\n");
-        socket.destroy();
+        rejectUpgrade(401, "viewer_ticket_missing_expired_or_already_used");
         return;
       }
       viewerTickets.delete(ticket);
       ownerId = record.ownerId;
     } else {
-      socket.write("HTTP/1.1 404 Not Found\r\n\r\n");
-      socket.destroy();
+      rejectUpgrade(404, "unsupported_role");
       return;
     }
 
     socketServer.handleUpgrade(request, socket, head, (webSocket) => {
+      logger.info({ role }, "Browser WebSocket accepted");
       if (role === "worker") {
         handleWorkerSocket(webSocket, ownerId!);
       } else {
