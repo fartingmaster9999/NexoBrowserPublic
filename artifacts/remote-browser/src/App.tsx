@@ -19,6 +19,37 @@ import NotFound from '@/pages/not-found';
 const queryClient = new QueryClient();
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
 
+function resolveBrowserTarget(input: string): string {
+  const address = input.trim();
+  try {
+    const explicitUrl = new URL(address);
+    if (explicitUrl.protocol === 'http:' || explicitUrl.protocol === 'https:') {
+      return explicitUrl.href;
+    }
+  } catch {
+    // Inputs without a scheme are checked as hostnames below or searched.
+  }
+
+  if (!/\s/.test(address)) {
+    try {
+      const candidate = new URL(`https://${address}`);
+      const hostname = candidate.hostname;
+      if (
+        hostname === 'localhost' ||
+        hostname.includes('.') ||
+        /^\d{1,3}(?:\.\d{1,3}){3}$/.test(hostname)
+      ) {
+        if (hostname === 'localhost') candidate.protocol = 'http:';
+        return candidate.href;
+      }
+    } catch {
+      // Invalid host-like input is treated as a search phrase.
+    }
+  }
+
+  return `https://www.google.com/search?q=${encodeURIComponent(address)}`;
+}
+
 function Mark({ small = false }: { small?: boolean }) {
   return (
     <span className={`inline-flex items-center justify-center rounded-md bg-[#202529] text-[#d5d9dc] ${small ? 'h-8 w-8' : 'h-9 w-9'}`} aria-hidden="true">
@@ -157,6 +188,7 @@ function BrowserPage() {
   const [frame, setFrame] = useState<{ data: string; width: number; height: number } | null>(null);
   const [liveStatus, setLiveStatus] = useState<BrowserStatus | null>(null);
   const [urlInput, setUrlInput] = useState('');
+  const [navigationError, setNavigationError] = useState('');
   const [copied, setCopied] = useState(false);
   const imageRef = useRef<HTMLImageElement>(null);
   const lastPointerAt = useRef(0);
@@ -201,6 +233,8 @@ function BrowserPage() {
           queryClient.setQueryData(getGetBrowserStatusQueryKey(), next);
         } else if (message.type === 'frame') {
           setFrame({ data: message.data, width: message.width, height: message.height });
+        } else if (message.type === 'error') {
+          setNavigationError('The browser could not open that page. Check the address or try a search.');
         }
       } catch {
         setSocketState('error');
@@ -218,8 +252,12 @@ function BrowserPage() {
     event.preventDefault();
     const address = urlInput.trim();
     if (!address) return;
-    const target = /^https?:\/\//i.test(address) ? address : `https://${address}`;
-    send({ type: 'navigate', url: target });
+    if (socket?.readyState !== WebSocket.OPEN) {
+      setNavigationError('Click Open browser first to start the remote session.');
+      return;
+    }
+    setNavigationError('');
+    send({ type: 'navigate', url: resolveBrowserTarget(address) });
   };
   const point = (event: MouseEvent<HTMLImageElement>, action: 'move' | 'down' | 'up') => {
     if (!imageRef.current || !frame) return;
@@ -273,8 +311,8 @@ function BrowserPage() {
             <button type="button" onClick={() => send({ type: 'reload' })} disabled={!socket} className="focus-ring rounded p-2 text-[#aeb6bb] hover:bg-[#202529] disabled:opacity-35" aria-label="Reload page" data-testid="button-browser-reload"><RefreshCw size={14} /></button>
             <form onSubmit={navigate} className="flex min-w-[180px] flex-1 items-center rounded-md border border-[#30363a] bg-[#0b0d0f] px-3 focus-within:border-[#737d83]">
               <LockKeyhole size={13} className="shrink-0 text-[#828c92]" />
-              <input aria-label="Website address" data-testid="input-browser-url" value={urlInput} onChange={(event) => setUrlInput(event.target.value)} placeholder="Enter a URL" className="h-9 w-full bg-transparent px-2 text-sm text-[#e8ecef] outline-none placeholder:text-[#737d83]" />
-              <button className="focus-ring rounded p-1.5 text-[#c5cbd0] hover:bg-[#202529] disabled:opacity-35" disabled={!socket || !urlInput.trim()} aria-label="Go to address" data-testid="button-browser-navigate"><ArrowUpRight size={15} /></button>
+              <input aria-label="Search or enter a website address" data-testid="input-browser-url" value={urlInput} onChange={(event) => { setUrlInput(event.target.value); setNavigationError(''); }} placeholder="Search or enter a URL" className="h-9 w-full bg-transparent px-2 text-sm text-[#e8ecef] outline-none placeholder:text-[#737d83]" />
+              <button className="focus-ring rounded p-1.5 text-[#c5cbd0] hover:bg-[#202529] disabled:opacity-35" disabled={!urlInput.trim()} aria-label="Search or go to address" data-testid="button-browser-navigate"><ArrowUpRight size={15} /></button>
             </form>
             {connected && socketState !== 'connected' && <button type="button" onClick={() => { viewerTicket.reset(); startViewer(); }} disabled={viewerTicket.isPending || socketState === 'connecting'} className="focus-ring inline-flex h-9 items-center gap-2 rounded-md bg-[#d5d9dc] px-3 text-xs font-medium text-[#111416] hover:bg-[#c3c9cd] disabled:opacity-50" data-testid="button-open-browser">
               {viewerTicket.isPending || socketState === 'connecting' ? <LoaderCircle size={14} className="animate-spin" /> : <Play size={13} />}
@@ -282,6 +320,7 @@ function BrowserPage() {
             </button>}
             {browserOpen && <button type="button" onClick={stop} disabled={stopSession.isPending} className="focus-ring inline-flex h-9 items-center gap-2 rounded-md border border-[#454043] px-3 text-xs font-medium text-[#d2a6a3] hover:bg-[#21191a] disabled:opacity-50" data-testid="button-stop-session"><Square size={12} /> Stop</button>}
           </div>
+          {navigationError && <p className="border-b border-[#292e32] px-4 py-2 text-xs text-[#f08b83]" role="alert" data-testid="text-browser-navigation-error">{navigationError}</p>}
           <div className="relative flex min-h-[calc(100dvh-106px)] items-center justify-center bg-[#080a0c]">
             {statusQuery.isLoading ? <div className="flex flex-col items-center gap-3 text-sm text-[#9ba4aa]" data-testid="status-loading">
               <LoaderCircle size={20} className="animate-spin" /><span>Checking connection…</span>
