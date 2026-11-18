@@ -34,7 +34,21 @@ app.use(
     },
   }),
 );
-app.use(cors({ credentials: true, origin: true }));
+const browserFrontendOrigin = process.env.BROWSER_FRONTEND_ORIGIN?.trim();
+app.use(
+  cors({
+    credentials: true,
+    origin: browserFrontendOrigin
+      ? (origin, callback) => {
+          if (!origin || origin === browserFrontendOrigin) {
+            callback(null, true);
+          } else {
+            callback(null, false);
+          }
+        }
+      : true,
+  }),
+);
 app.use(express.json({ limit: "1mb" }));
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser(sessionSecret));

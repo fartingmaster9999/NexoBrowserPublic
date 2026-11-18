@@ -4,6 +4,7 @@ import {
   BROWSER_SESSION_COOKIE,
   BROWSER_SESSION_DURATION_MS,
   browserSessionCookieOptions,
+  createBrowserAccessToken,
   passwordFingerprint,
 } from "../lib/authSession";
 import {
@@ -88,7 +89,10 @@ router.post("/auth/login", (req, res): void => {
     ...browserSessionCookieOptions(req),
     signed: true,
   });
-  res.json({ authenticated: true });
+  res.json({
+    authenticated: true,
+    accessToken: createBrowserAccessToken(allowedEmail, process.env.SESSION_SECRET!),
+  });
 });
 
 router.get("/auth/session", requireBrowserOwner, (_req, res): void => {

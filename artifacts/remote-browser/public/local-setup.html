@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <title>Local browser setup · Private Browser</title>
+    <style>
+      :root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, sans-serif; background: #0b0d0f; color: #e8ecef; }
+      body { margin: 0; padding: 28px 18px 56px; }
+      main { max-width: 760px; margin: 0 auto; }
+      a { color: #d5d9dc; }
+      h1 { font-size: 24px; font-weight: 600; }
+      h2 { margin-top: 30px; font-size: 17px; }
+      p, li { color: #aeb6bb; font-size: 14px; line-height: 1.7; }
+      code, pre { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+      pre { overflow-x: auto; padding: 14px; border: 1px solid #30363a; border-radius: 6px; background: #080a0c; color: #d5d9dc; line-height: 1.65; }
+      .note { border-left: 3px solid #737d83; padding: 10px 14px; background: #111416; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <p><a href="/">← Back to Private Browser</a></p>
+      <h1>Run Chromium on your computer</h1>
+      <p>The website stays on Render. Express, Chromium, and the display run on your Windows computer through WSL 2 and a temporary Cloudflare Tunnel.</p>
+      <p class="note">The free Quick Tunnel URL changes when restarted. Paste the new URL into <strong>Set up local browser connection</strong> on the sign-in page. Keep the local API and tunnel running while browsing.</p>
+
+      <h2>1. Install WSL 2</h2>
+      <p>Open PowerShell as Administrator and run:</p>
+      <pre>wsl --install -d Ubuntu</pre>
+      <p>Restart if Windows asks, then open Ubuntu and complete its first-run setup.</p>
+
+      <h2>2. Install Linux packages and clone the private repository</h2>
+      <p>Install Node.js 24 and the <a href="https://github.com/cli/cli/blob/trunk/docs/install_linux.md">GitHub CLI</a> using their official Linux instructions before running these commands.</p>
+      <pre>sudo apt update
+sudo apt install -y xvfb x11vnc openbox curl git
+gh auth login
+gh repo clone fartingmaster9999/nexobrowser
+cd nexobrowser
+corepack enable
+pnpm install --frozen-lockfile</pre>
+      <p>Keep the repository under Ubuntu's home folder rather than <code>/mnt/c</code>.</p>
+
+      <h2>3. Install Chromium and create local account settings</h2>
+      <pre>cd tools/browser-worker
+npm install
+npx playwright install --with-deps chromium
+cd ../..
+cp tools/local-browser/.env.local.example .env.local</pre>
+      <p>Edit <code>.env.local</code>. Enter your approved email, a long unique password, and a random session secret. Generate the secret with <code>openssl rand -hex 32</code>. Keep this file private; it is ignored by Git.</p>
+
+      <h2>4. Start the browser desktop</h2>
+      <p>In Ubuntu terminal 1, from the repository root:</p>
+      <pre>bash tools/local-browser/start-desktop.sh</pre>
+      <p>In Ubuntu terminal 2:</p>
+      <pre>cd tools/browser-worker
+npm run start:desktop</pre>
+
+      <h2>5. Start the API and free tunnel</h2>
+      <p>In Ubuntu terminal 3, from the repository root:</p>
+      <pre>bash tools/local-browser/start-api.sh</pre>
+      <p>Install <code>cloudflared</code> in Ubuntu using <a href="https://developers.cloudflare.com/tunnel/downloads/">Cloudflare's official instructions</a>. In Ubuntu terminal 4:</p>
+      <pre>cloudflared tunnel --url http://127.0.0.1:8080</pre>
+      <p>Copy the HTTPS <code>trycloudflare.com</code> address printed by the command.</p>
+
+      <h2>6. Connect the website</h2>
+      <ol>
+        <li>Return to the sign-in page and choose <strong>Set up local browser connection</strong>.</li>
+        <li>Paste the tunnel's HTTPS URL and save.</li>
+        <li>Sign in with the local email and password, then choose <strong>Open browser</strong>.</li>
+      </ol>
+      <p>On later restarts, paste the new tunnel URL. The browser profile remains in <code>~/.nexo-browser/chromium-profile</code>.</p>
+
+      <h2>Stop the local browser</h2>
+      <p>Press Ctrl+C in the Chromium and API terminals, stop the tunnel, then run:</p>
+      <pre>bash tools/local-browser/stop-desktop.sh</pre>
+      <p>The VNC port is loopback-only. The public tunnel does not expose it directly; the browser view uses a short-lived single-use ticket issued after sign-in.</p>
+    </main>
+  </body>
+</html>

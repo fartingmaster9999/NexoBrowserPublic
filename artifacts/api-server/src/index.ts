@@ -2,6 +2,7 @@ import app from "./app";
 import { createServer } from "node:http";
 import { logger } from "./lib/logger";
 import { attachBrowserWebSocket } from "./lib/browserBroker";
+import { attachVncWebSocket } from "./lib/localVnc";
 
 const rawPort = process.env["PORT"];
 
@@ -19,12 +20,13 @@ if (Number.isNaN(port) || port <= 0) {
 
 const server = createServer(app);
 attachBrowserWebSocket(server);
+attachVncWebSocket(server);
 
 server.on("error", (err) => {
   logger.error({ err }, "Error listening on port");
   process.exit(1);
 });
 
-server.listen(port, () => {
-  logger.info({ port }, "Server listening");
+server.listen(port, process.env.HOST || "0.0.0.0", () => {
+  logger.info({ port, host: process.env.HOST || "0.0.0.0" }, "Server listening");
 });

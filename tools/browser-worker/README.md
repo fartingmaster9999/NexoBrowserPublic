@@ -1,37 +1,32 @@
-# Private Browser computer connector
+# Local Chromium desktop
 
-This connector runs Chromium on your own computer and makes an outbound,
-encrypted WebSocket connection to your Private Browser app. It does not open a
-port on your computer, need a tunnel, or use your normal Chrome profile. Its
-separate Chromium profile stays in `~/.private-browser/chromium-profile`.
+This starts Chromium inside the private Linux desktop used by the local
+browser service. It replaces the old Render-paired screenshot worker.
 
-## Connect
-
-1. On the computer that should run Chromium, install Node.js 20 or later.
-2. Sign in to Private Browser, download the connector ZIP, and extract it.
-3. Choose **Generate pairing code** in Private Browser. The app displays a
-   command containing its address and a one-time pairing code.
-4. Open a terminal in the extracted connector folder and run:
+1. From the repository root, install this folder's dependencies:
 
    ```sh
+   cd tools/browser-worker
    npm install
-   npx playwright install chromium
-   node worker.mjs --server https://YOUR-PRIVATE-BROWSER-URL --code ONE_TIME_CODE
+   npx playwright install --with-deps chromium
    ```
 
-   Replace the example address and code with the command shown in the app. On
-   Linux, if Chromium reports missing system libraries, run
-   `npx playwright install --with-deps chromium` on a machine where you have
-   permission to install them.
+2. In a separate WSL terminal, start the virtual desktop:
 
-5. Keep the terminal open. Return to the app and choose **Open browser** when
-   the computer shows as connected.
+   ```sh
+   bash tools/local-browser/start-desktop.sh
+   ```
 
-The pairing code expires after five minutes and works once. Generate a new code
-if you close the connector or the connection is lost. Your browser cookies are
-kept only in the connector's separate profile on this computer; do not share
-that profile directory.
+3. Start Chromium from the repository root:
 
-The remote view sends page images and your input actions through the private
-app connection. It is intended for the account owner only. Keep the app private
-and press Ctrl+C in the connector terminal when you are done.
+   ```sh
+   cd tools/browser-worker
+   npm run start:desktop
+   ```
+
+Keep the Chromium terminal open. Its profile is separate from your normal
+browser profile and is stored in `~/.nexo-browser/chromium-profile`.
+
+Follow `tools/local-browser/README.md` to start the local API and Cloudflare
+Quick Tunnel. The VNC port is bound to loopback and is only reachable through
+the authenticated, one-use viewer ticket.

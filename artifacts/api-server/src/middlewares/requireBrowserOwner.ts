@@ -2,7 +2,18 @@ import type { Request, RequestHandler } from "express";
 import {
   BROWSER_SESSION_COOKIE,
   passwordFingerprint,
+  verifyBrowserAccessToken,
 } from "../lib/authSession";
+
+function configuredFrontendOrigin(): string | null {
+  const value = process.env.BROWSER_FRONTEND_ORIGIN?.trim();
+  if (!value) return null;
+  try {
+    return new URL(value).origin.toLowerCase();
+  } catch {
+    return null;
+  }
+}
 
 function normalizedHost(value: string): string {
   try {
@@ -14,14 +25,17 @@ function normalizedHost(value: string): string {
 
 export function isSameOriginRequest(req: Request): boolean {
   const origin = req.get("origin");
-  if (req.get("sec-fetch-site") === "cross-site") {
-    return false;
-  }
-
   if (!origin) return true;
 
   try {
-    const originHost = new URL(origin).host.toLowerCase();
+    const parsedOrigin = new URL(origin);
+    const frontendOrigin = configuredFrontendOrigin();
+    if (frontendOrigin && parsedOrigin.origin.toLowerCase() === frontendOrigin) {
+      return true;
+    }
+    if (req.get("sec-fetch-site") === "cross-site") return false;
+
+    const originHost = parsedOrigin.host.toLowerCase();
     const forwardedHost = req
       .get("x-forwarded-host")
       ?.split(",")[0]
@@ -50,11 +64,25 @@ export const requireBrowserOwner: RequestHandler = (req, res, next) => {
     return;
   }
 
+  const authorization = req.get("authorization");
+  const bearerToken = authorization?.match(/^Bearer\s+(.+)$/i)?.[1];
+  const currentPassword = process.env.BROWSER_OWNER_PASSWORD;
+  const allowedEmail = process.env.BROWSER_OWNER_EMAIL?.trim().toLowerCase();
+  const tokenOwner =
+    bearerToken && process.env.SESSION_SECRET
+      ? verifyBrowserAccessToken(bearerToken, process.env.SESSION_SECRET)
+      : null;
+
+  if (tokenOwner && allowedEmail && tokenOwner === allowedEmail) {
+    res.locals.browserOwnerId = allowedEmail;
+    next();
+    return;
+  }
+
   const sessionValue = req.signedCookies?.[BROWSER_SESSION_COOKIE];
   const [expiresAtText, sessionPasswordFingerprint, extraValue] =
     typeof sessionValue === "string" ? sessionValue.split(".") : [];
   const sessionExpiresAt = Number(expiresAtText);
-  const currentPassword = process.env.BROWSER_OWNER_PASSWORD;
   if (
     extraValue !== undefined ||
     !Number.isSafeInteger(sessionExpiresAt) ||
@@ -67,7 +95,6 @@ export const requireBrowserOwner: RequestHandler = (req, res, next) => {
     return;
   }
 
-  const allowedEmail = process.env.BROWSER_OWNER_EMAIL?.trim().toLowerCase();
   if (!allowedEmail) {
     req.log.error("Browser owner account is not configured.");
     res.status(503).json({ error: "Browser owner account is not configured." });
