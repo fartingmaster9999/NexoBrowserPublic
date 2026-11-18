@@ -293,11 +293,14 @@ function BrowserPage() {
             </div> : !connected ? <div className="w-full max-w-xl px-5 py-10">
               <div className="flex items-center gap-2 text-sm text-[#9ba4aa]"><Monitor size={16} /> Computer not connected</div>
               <h1 className="mt-4 text-lg font-medium">Connect your computer</h1>
-              <p className="mt-2 max-w-lg text-sm leading-6 text-[#9ba4aa]">Copy the browser connector folder to the computer that should run Chromium. Generate a one-time code to pair it. The connector opens an outbound secure connection; no inbound ports or tunnel are needed.</p>
-              <button type="button" onClick={createPairing} disabled={pairing.isPending} className="focus-ring mt-5 inline-flex h-10 items-center gap-2 rounded-md bg-[#d5d9dc] px-4 text-sm font-medium text-[#111416] hover:bg-[#c3c9cd] disabled:opacity-60" data-testid="button-create-pairing">
-                {pairing.isPending ? <LoaderCircle size={15} className="animate-spin" /> : <KeyRound size={15} />}
-                {pairing.isPending ? 'Generating code…' : pairing.data ? 'Generate another code' : 'Generate pairing code'}
-              </button>
+              <p className="mt-2 max-w-lg text-sm leading-6 text-[#9ba4aa]">Download and extract the connector on the computer that should run Chromium. Generate a one-time code to pair it. The connector makes an outbound secure connection, so no tunnel or open port is needed.</p>
+              <div className="mt-5 flex flex-wrap gap-3">
+                <a href={`${basePath}/browser-worker.zip`} download className="focus-ring inline-flex h-10 items-center rounded-md border border-[#343a3f] px-4 text-sm font-medium text-[#d5d9dc] hover:bg-[#171b1e]" data-testid="link-download-browser-worker">Download connector</a>
+                <button type="button" onClick={createPairing} disabled={pairing.isPending} className="focus-ring inline-flex h-10 items-center gap-2 rounded-md bg-[#d5d9dc] px-4 text-sm font-medium text-[#111416] hover:bg-[#c3c9cd] disabled:opacity-60" data-testid="button-create-pairing">
+                  {pairing.isPending ? <LoaderCircle size={15} className="animate-spin" /> : <KeyRound size={15} />}
+                  {pairing.isPending ? 'Generating code…' : pairing.data ? 'Generate another code' : 'Generate pairing code'}
+                </button>
+              </div>
               {pairing.isError && <p className="mt-3 text-sm text-[#f08b83]" role="alert" data-testid="text-pairing-error">Could not generate a pairing code. Try again.</p>}
               {pairing.data && <div className="mt-5 rounded-md border border-[#292e32] bg-[#111416] p-4" data-testid="panel-pairing-code">
                 <div className="flex flex-wrap items-center justify-between gap-2">
@@ -305,7 +308,7 @@ function BrowserPage() {
                   <button type="button" onClick={copyCode} className="focus-ring inline-flex items-center gap-1.5 rounded border border-[#343a3f] px-2.5 py-1.5 text-xs text-[#d5d9dc] hover:bg-[#202529]" data-testid="button-copy-pairing-code">{copied ? <Check size={13} /> : <Copy size={13} />}{copied ? 'Copied' : 'Copy'}</button>
                 </div>
                 <code className="mt-3 block font-mono text-2xl tracking-[.12em] text-[#e8ecef]" data-testid="text-pairing-code">{pairing.data.code}</code>
-                <p className="mt-4 text-xs leading-5 text-[#9ba4aa]">On the computer running Chromium, open the copied <code>tools/browser-worker</code> folder and run:</p>
+                <p className="mt-4 text-xs leading-5 text-[#9ba4aa]">Open a terminal in the extracted connector folder and run:</p>
                 <pre className="mt-2 overflow-x-auto rounded bg-[#080a0c] p-3 font-mono text-xs leading-5 text-[#d5d9dc]" data-testid="text-connector-command">{`npm install\nnpx playwright install chromium\nnode worker.mjs --server ${window.location.origin} --code ${pairing.data.code}`}</pre>
                 <p className="mt-3 text-xs text-[#828c92]">Keep the connector running. Never share this one-use code.</p>
               </div>}
