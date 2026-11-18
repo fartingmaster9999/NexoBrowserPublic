@@ -185,12 +185,14 @@ function BrowserPage() {
   const stopSession = useStopBrowserSession();
   const [socket, setSocket] = useState<WebSocket | null>(null);
   const [socketState, setSocketState] = useState<'idle' | 'connecting' | 'connected' | 'error'>('idle');
+  const [viewerError, setViewerError] = useState('');
   const [frame, setFrame] = useState<{ data: string; width: number; height: number } | null>(null);
   const [liveStatus, setLiveStatus] = useState<BrowserStatus | null>(null);
   const [urlInput, setUrlInput] = useState('');
   const [navigationError, setNavigationError] = useState('');
   const [copied, setCopied] = useState(false);
   const imageRef = useRef<HTMLImageElement>(null);
+  const viewerSocketRef = useRef<WebSocket | null>(null);
   const lastPointerAt = useRef(0);
   const currentStatus = liveStatus ?? statusQuery.data;
   const connected = currentStatus?.deviceConnected ?? false;
@@ -214,10 +216,36 @@ function BrowserPage() {
     const socketUrl = new URL(raw, window.location.href);
     socketUrl.searchParams.set('ticket', ticket.ticket);
     const ws = new WebSocket(socketUrl);
+    let opened = false;
+    viewerSocketRef.current = ws;
     setSocket(ws);
-    ws.onopen = () => setSocketState('connected');
-    ws.onclose = () => { setSocketState('idle'); setSocket(null); };
-    ws.onerror = () => setSocketState('error');
+    ws.onopen = () => {
+      opened = true;
+      setSocketState('connected');
+      setViewerError('');
+    };
+    ws.onclose = (event) => {
+      if (viewerSocketRef.current !== ws) return;
+      viewerSocketRef.current = null;
+      setSocket(null);
+      if (event.code === 1000) {
+        setSocketState('idle');
+        return;
+      }
+      setSocketState('error');
+      if (!opened && event.code === 4404) {
+        setViewerError('The server cannot find the connected computer. Reconnect the worker, then try again.');
+      } else if (!opened && event.code === 4401) {
+        setViewerError('The viewer ticket expired. Click Open browser again to create a fresh connection.');
+      } else {
+        setViewerError(`The browser view connection closed unexpectedly (code ${event.code}). Make sure this page and the worker use the same website URL, then retry.`);
+      }
+    };
+    ws.onerror = () => {
+      if (viewerSocketRef.current !== ws) return;
+      setSocketState('error');
+      setViewerError('Could not connect the browser view. Retry; if it fails again, check that the worker and this page use the same website URL.');
+    };
     ws.onmessage = (event) => {
       try {
         const message = JSON.parse(event.data);
@@ -233,14 +261,18 @@ function BrowserPage() {
           queryClient.setQueryData(getGetBrowserStatusQueryKey(), next);
         } else if (message.type === 'frame') {
           setFrame({ data: message.data, width: message.width, height: message.height });
+          setViewerError('');
         } else if (message.type === 'error') {
-          setNavigationError('The browser could not open that page. Check the address or try a search.');
+          setNavigationError('The browser could not complete that action. Try another address or reconnect the browser.');
         }
       } catch {
         setSocketState('error');
       }
     };
-    return () => { ws.close(); };
+    return () => {
+      if (viewerSocketRef.current === ws) viewerSocketRef.current = null;
+      ws.close();
+    };
   }, [viewerTicket.data, queryClient]);
 
   useEffect(() => () => socket?.close(), [socket]);
@@ -284,6 +316,7 @@ function BrowserPage() {
   const startViewer = () => viewerTicket.mutate(undefined);
   const openViewer = () => {
     setNavigationError('');
+    setViewerError('');
     setFrame(null);
     viewerTicket.reset();
     startViewer();
@@ -376,13 +409,16 @@ function BrowserPage() {
               </h2>
               <p className="mt-1 text-sm text-[#9ba4aa]">
                 {socketState === 'error'
-                  ? 'The browser view could not be opened. Try reconnecting.'
+                  ? 'The browser view could not be opened.'
                   : socketState === 'connected'
                     ? 'No screenshot has arrived yet. Check the worker terminal, then retry.'
                     : 'Open the browser session to begin.'}
               </p>
+              {(viewerError || viewerTicket.isError) && <p className="mt-3 max-w-lg text-sm leading-5 text-[#f08b83]" role="alert" data-testid="text-browser-viewer-error">
+                {viewerError || (viewerTicket.error instanceof Error ? viewerTicket.error.message : 'Could not start the browser view. Try again.')}
+              </p>}
               {connected && socketState !== 'connecting' && !viewerTicket.isPending && (
-                <button type="button" onClick={openViewer} className="focus-ring mt-4 inline-flex items-center gap-2 rounded-md bg-[#d5d9dc] px-4 py-2 text-sm font-medium text-[#111416] hover:bg-[#c3c9cd]" data-testid="button-open-browser">
+                <button type="button" onClick={openViewer} disabled={viewerTicket.isPending} className="focus-ring mt-4 inline-flex items-center gap-2 rounded-md bg-[#d5d9dc] px-4 py-2 text-sm font-medium text-[#111416] hover:bg-[#c3c9cd] disabled:opacity-50" data-testid="button-open-browser">
                   <Play size={14} />
                   {socketState === 'connected' ? 'Retry browser view' : socketState === 'error' ? 'Reconnect' : 'Open browser'}
                 </button>
