@@ -26,6 +26,14 @@
       <p>The website stays on Render. Express, Chromium, and the display run on your Windows computer through WSL 2 and a temporary Cloudflare Tunnel.</p>
       <p class="note">The free Quick Tunnel URL changes when restarted. Paste the new URL into <strong>Set up local browser connection</strong> on the sign-in page. Keep the local API and tunnel running while browsing.</p>
 
+      <h2>Open it from ChromeOS</h2>
+      <ol>
+        <li>On the sign-in page, download <code>nexobrowser.html</code>.</li>
+        <li>Open the ChromeOS Files app, go to Downloads, and open the file.</li>
+        <li>Choose <strong>Open Private Browser</strong>. Sign in in the new Chrome window if prompted.</li>
+      </ol>
+      <p>The remote viewer opens automatically when your local computer is online. If Chrome blocks the new window, allow pop-ups for the hosted site. The hosted website cannot open files from Downloads by itself.</p>
+
       <h2>1. Install WSL 2</h2>
       <p>Open PowerShell as Administrator and run:</p>
       <pre>wsl --install -d Ubuntu</pre>

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
 import {
-  ExternalLink, Globe2, LoaderCircle, Maximize2, Monitor, Play, ShieldCheck, WifiOff, X,
+  Download, ExternalLink, Globe2, LoaderCircle, Maximize2, Monitor, Play, ShieldCheck, WifiOff, X,
 } from 'lucide-react';
 import { Redirect, Route, Switch, useLocation, Router as WouterRouter } from 'wouter';
 import {
@@ -23,6 +23,7 @@ import {
 } from '@/lib/browserApi';
 import { NoVncViewer } from '@/components/NoVncViewer';
 import NotFound from '@/pages/not-found';
+import { createChromeOsLauncherHtml } from '@/lib/chromeosLauncher';
 
 const queryClient = new QueryClient();
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
@@ -36,6 +37,14 @@ function Mark({ small = false }: { small?: boolean }) {
 }
 
 type BrowserAuthStatus = 'loading' | 'signed-in' | 'signed-out';
+
+function hasAutoOpenRequest(): boolean {
+  return new URLSearchParams(window.location.search).get('openRemoteBrowser') === '1';
+}
+
+function browserRouteWithAutoOpen(): string {
+  return hasAutoOpenRequest() ? '/browser?openRemoteBrowser=1' : '/browser';
+}
 
 function useBrowserAuth(): BrowserAuthStatus {
   const [status, setStatus] = useState<BrowserAuthStatus>('loading');
@@ -70,7 +79,7 @@ function useBrowserAuth(): BrowserAuthStatus {
 function Home() {
   const authStatus = useBrowserAuth();
   if (authStatus === 'loading') return <div className="min-h-[100dvh] bg-[#0b0d0f]" data-testid="auth-loading" />;
-  if (authStatus === 'signed-in') return <Redirect to="/browser" />;
+  if (authStatus === 'signed-in') return <Redirect to={browserRouteWithAutoOpen()} />;
   return <AuthPage />;
 }
 
@@ -104,7 +113,7 @@ function PasswordSignIn() {
       saveBrowserAccessToken(result.accessToken);
       setPassword('');
       client.clear();
-      setLocation('/browser');
+      setLocation(browserRouteWithAutoOpen());
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Sign-in failed. Try again.');
     } finally {
@@ -222,10 +231,44 @@ function AuthPage() {
         <h1 className="text-xl font-medium tracking-tight">Sign in</h1>
         <p className="mt-1 text-sm text-[#9ba4aa]">Use the email and password for your owner account.</p>
         <PasswordSignIn />
+        <div className="mt-5 border-t border-[#252a2e] pt-5">
+          <DownloadLauncherButton />
+          <p className="mt-2 text-xs leading-5 text-[#828c92]">
+            Download the file, then open it from ChromeOS Files. The hosted site cannot open local files by itself.
+          </p>
+        </div>
         <LocalConnectionSettings />
         <p className="mt-5 flex items-center gap-2 text-xs text-[#828c92]"><ShieldCheck size={14} /> Access is limited to the approved account.</p>
       </div>
     </main>
+  );
+}
+
+function downloadChromeOsLauncher(): void {
+  const browserUrl = new URL(`${basePath}/browser`, window.location.origin);
+  browserUrl.searchParams.set('openRemoteBrowser', '1');
+  const launcherHtml = createChromeOsLauncherHtml(browserUrl.toString());
+  const objectUrl = URL.createObjectURL(new Blob([launcherHtml], { type: 'text/html;charset=utf-8' }));
+  const anchor = document.createElement('a');
+  anchor.href = objectUrl;
+  anchor.download = 'nexobrowser.html';
+  document.body.append(anchor);
+  anchor.click();
+  anchor.remove();
+  window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+}
+
+function DownloadLauncherButton() {
+  return (
+    <button
+      type="button"
+      onClick={downloadChromeOsLauncher}
+      className="focus-ring inline-flex h-10 items-center justify-center gap-2 rounded-md border border-[#343a3f] px-3 text-sm text-[#d5d9dc] hover:bg-[#171b1e]"
+      data-testid="button-download-launcher"
+    >
+      <Download size={15} />
+      Download nexobrowser.html
+    </button>
   );
 }
 
@@ -306,6 +349,7 @@ function BrowserPage() {
       {!isFullscreen && <header className="flex h-12 shrink-0 items-center justify-between border-b border-[#252a2e] px-4">
         <a href="/browser" className="flex items-center gap-2.5 text-sm font-medium" data-testid="link-browser-home"><Mark small /> Private Browser</a>
         <div className="flex items-center gap-2">
+          <DownloadLauncherButton />
           <button
             type="button"
             onClick={openNewWindow}
@@ -438,7 +482,7 @@ function SignOutButton() {
 function ProtectedBrowser() {
   const authStatus = useBrowserAuth();
   if (authStatus === 'loading') return <div className="min-h-[100dvh] animate-pulse bg-[#0b0d0f]" data-testid="auth-loading" />;
-  return authStatus === 'signed-in' ? <BrowserPage /> : <Redirect to="/" />;
+  return authStatus === 'signed-in' ? <BrowserPage /> : <Redirect to={hasAutoOpenRequest() ? '/?openRemoteBrowser=1' : '/'} />;
 }
 
 function AppRoutes() {
