@@ -25,7 +25,14 @@ await mkdir(profileDir, { recursive: true });
 const context = await chromium.launchPersistentContext(profileDir, {
   headless: false,
   viewport: null,
-  args: ["--no-sandbox", "--disable-dev-shm-usage"],
+  args: [
+    "--no-sandbox",
+    "--disable-dev-shm-usage",
+    "--ozone-platform=x11",
+    "--disable-gpu",
+    "--window-position=0,0",
+    "--window-size=1365,900",
+  ],
 });
 
 const page = context.pages()[0] ?? (await context.newPage());

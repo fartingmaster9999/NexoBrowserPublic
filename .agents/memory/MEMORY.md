@@ -1,0 +1,1 @@
+- [Ubuntu Wayland with Xvfb](local-browser-wayland.md) — clear inherited Wayland settings and force Chromium onto the virtual X11 display.
