@@ -32,7 +32,8 @@ const context = await chromium.launchPersistentContext(profileDir, {
     "--disable-gpu",
     "--window-position=0,0",
     "--window-size=1920,1080",
-    "--start-maximized",
+    "--new-window",
+    "--start-fullscreen",
   ],
 });
 

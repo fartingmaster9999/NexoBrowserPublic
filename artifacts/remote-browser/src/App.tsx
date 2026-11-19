@@ -267,6 +267,9 @@ function BrowserPage() {
   };
   const openViewer = () => {
     setViewerError('');
+    if (!document.fullscreenElement) {
+      void browserRootRef.current?.requestFullscreen().catch(() => undefined);
+    }
     startViewer();
   };
   const toggleFullscreen = async () => {
