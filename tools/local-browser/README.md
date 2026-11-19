@@ -107,6 +107,15 @@ still requires the owner password and a short-lived single-use viewer ticket.
 When the computer or tunnel restarts, repeat step 5 and replace the saved URL
 on the sign-in page. The browser profile remains on your computer.
 
+The viewer first tries a direct WebRTC connection between the laptop and the
+Ubuntu computer. The Cloudflare Tunnel carries sign-in and connection setup;
+it does not carry the screen data when WebRTC connects directly. WebRTC uses
+Google's public STUN service to discover network routes, so it can see the
+devices' public network addresses. If either network blocks direct UDP or its
+NAT cannot make a direct connection, choose **Use standard connection** to
+send the display through the existing tunnel instead. No paid TURN relay is
+configured.
+
 ## Stop everything
 
 Press Ctrl+C in the Chromium and API terminals. Then stop the virtual display:

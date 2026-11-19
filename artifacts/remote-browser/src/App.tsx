@@ -22,6 +22,7 @@ import {
   setBrowserApiOrigin,
 } from '@/lib/browserApi';
 import { NoVncViewer } from '@/components/NoVncViewer';
+import { WebRtcNoVncViewer } from '@/components/WebRtcNoVncViewer';
 import NotFound from '@/pages/not-found';
 import { createChromeOsLauncherHtml } from '@/lib/chromeosLauncher';
 
@@ -272,6 +273,8 @@ function DownloadLauncherButton() {
   );
 }
 
+type ViewerTransport = 'webrtc' | 'vnc';
+
 function BrowserPage() {
   const queryClient = useQueryClient();
   const autoOpenViewerRef = useRef(new URLSearchParams(window.location.search).get('openRemoteBrowser') === '1');
@@ -280,6 +283,8 @@ function BrowserPage() {
   const stopSession = useStopBrowserSession();
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [viewerUrl, setViewerUrl] = useState('');
+  const [viewerTransport, setViewerTransport] = useState<ViewerTransport>('webrtc');
+  const viewerTransportRef = useRef<ViewerTransport>('webrtc');
   const [viewerState, setViewerState] = useState<'idle' | 'connecting' | 'connected' | 'error'>('idle');
   const [viewerError, setViewerError] = useState('');
   const currentStatus = statusQuery.data;
@@ -302,11 +307,17 @@ function BrowserPage() {
   useEffect(() => {
     const ticket = viewerTicket.data;
     if (!ticket) return;
-    setViewerUrl(createBrowserSocketUrl(ticket.socketPath, ticket.ticket));
+    const socketPath =
+      viewerTransportRef.current === 'webrtc'
+        ? '/api/browser/webrtc'
+        : ticket.socketPath;
+    setViewerUrl(createBrowserSocketUrl(socketPath, ticket.ticket));
     setViewerState('connecting');
   }, [viewerTicket.data]);
 
-  const startViewer = () => {
+  const startViewer = (transport: ViewerTransport = 'webrtc') => {
+    viewerTransportRef.current = transport;
+    setViewerTransport(transport);
     setViewerUrl('');
     viewerTicket.reset();
     viewerTicket.mutate(undefined);
@@ -314,7 +325,7 @@ function BrowserPage() {
   const openViewer = () => {
     setViewerError('');
     setIsFullscreen(true);
-    startViewer();
+    startViewer('webrtc');
   };
   const toggleFullscreen = () => setIsFullscreen((current) => !current);
   const openNewWindow = () => {
@@ -358,6 +369,10 @@ function BrowserPage() {
   const handleViewerError = useCallback((message: string) => {
     setViewerError(message);
   }, []);
+  const switchToVnc = () => {
+    setViewerError('');
+    startViewer('vnc');
+  };
 
   return (
     <main className={`${isFullscreen ? 'fixed inset-0 z-40 w-screen' : 'relative'} flex h-[100dvh] flex-col overflow-hidden bg-[#0b0d0f] text-[#e8ecef]`}>
@@ -406,8 +421,20 @@ function BrowserPage() {
               <a href="/local-setup.html" className="focus-ring mt-5 inline-flex h-10 items-center rounded-md border border-[#343a3f] px-4 text-sm font-medium text-[#d5d9dc] hover:bg-[#171b1e]" data-testid="link-local-setup">Local setup instructions</a>
               {viewerError && <p className="mt-4 text-sm text-[#f08b83]" role="alert" data-testid="text-browser-viewer-error">{viewerError}</p>}
             </div> : viewerUrl ? <div className="absolute inset-0 h-full w-full" data-testid="browser-viewer-panel">
-              <NoVncViewer url={viewerUrl} onState={handleViewerState} onError={handleViewerError} />
+              {viewerTransport === 'webrtc' ? (
+                <WebRtcNoVncViewer url={viewerUrl} onState={handleViewerState} onError={handleViewerError} />
+              ) : (
+                <NoVncViewer url={viewerUrl} onState={handleViewerState} onError={handleViewerError} />
+              )}
               {viewerError && <p className="absolute bottom-3 left-3 right-3 rounded bg-[#21191a]/95 px-3 py-2 text-sm text-[#f08b83]" role="alert" data-testid="text-browser-viewer-error">{viewerError}</p>}
+              {viewerTransport === 'webrtc' && viewerState === 'error' && <button
+                type="button"
+                onClick={switchToVnc}
+                className="focus-ring absolute bottom-3 right-3 z-10 rounded-md border border-[#454a4f] bg-[#111416]/95 px-3 py-2 text-sm text-[#e8ecef] shadow-lg hover:bg-[#202529]"
+                data-testid="button-switch-to-vnc"
+              >
+                Use standard connection
+              </button>}
             </div> : <div className="flex flex-col items-center px-6 text-center" data-testid="browser-empty-view">
               {viewerTicket.isPending || viewerState === 'connecting' ? <LoaderCircle size={20} className="animate-spin text-[#aeb6bb]" /> : <Globe2 size={20} className="text-[#aeb6bb]" />}
               <h2 className="mt-3 text-sm font-medium">{viewerState === 'error' ? 'Browser view disconnected' : 'Local Chromium is ready'}</h2>
@@ -424,7 +451,9 @@ function BrowserPage() {
           {!isFullscreen && <div className="flex h-9 shrink-0 items-center justify-between gap-3 border-t border-[#292e32] px-3 text-xs text-[#828c92]">
             <span className="flex min-w-0 items-center gap-2 truncate" data-testid="text-page-title"><Globe2 size={13} className="shrink-0" />{currentStatus?.pageTitle || 'Chromium browser'}</span>
             <div className="flex items-center gap-3">
-              {viewerUrl && <span>{viewerState === 'connected' ? 'Connected' : viewerState === 'error' ? 'Disconnected' : 'Connecting…'}</span>}
+              {viewerUrl && <span>{viewerState === 'connected'
+                ? viewerTransport === 'webrtc' ? 'Connected directly (WebRTC)' : 'Connected (standard)'
+                : viewerState === 'error' ? 'Disconnected' : 'Connecting…'}</span>}
               {browserOpen && <button type="button" onClick={stop} disabled={stopSession.isPending} className="rounded border border-[#454043] px-2 py-1 text-[#d2a6a3] hover:bg-[#21191a] disabled:opacity-50" data-testid="button-stop-session">Disconnect</button>}
               <span className="shrink-0">{connected ? 'Local computer online' : 'Local computer offline'}</span>
             </div>
