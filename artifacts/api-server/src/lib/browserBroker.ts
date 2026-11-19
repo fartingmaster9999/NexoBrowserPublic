@@ -6,6 +6,7 @@ import { logger } from "./logger";
 
 const SOCKET_PATH = "/api/browser/ws";
 const VNC_SOCKET_PATH = "/api/browser/vnc";
+const WEBRTC_SOCKET_PATH = "/api/browser/webrtc";
 const PAIRING_TTL_MS = 5 * 60 * 1000;
 const VIEWER_TTL_MS = 60 * 1000;
 const MAX_FRAME_MESSAGE_LENGTH = 1_800_000;
@@ -360,7 +361,12 @@ export function attachBrowserWebSocket(server: Server): void {
 
   server.on("upgrade", (request: IncomingMessage, socket, head) => {
     const requestUrl = new URL(request.url ?? "/", "http://localhost");
-    if (requestUrl.pathname === VNC_SOCKET_PATH) return;
+    if (
+      requestUrl.pathname === VNC_SOCKET_PATH ||
+      requestUrl.pathname === WEBRTC_SOCKET_PATH
+    ) {
+      return;
+    }
     const role = requestUrl.searchParams.get("role");
     const originHost = (() => {
       try {
