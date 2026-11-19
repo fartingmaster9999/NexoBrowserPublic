@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
 import {
-  Download, ExternalLink, Globe2, LoaderCircle, Maximize2, Monitor, Play, ShieldCheck, WifiOff, X,
+  Download, ExternalLink, Globe2, LoaderCircle, Maximize2, Monitor, Play, ShieldCheck, WifiOff,
 } from 'lucide-react';
 import { Redirect, Route, Switch, useLocation, Router as WouterRouter } from 'wouter';
 import {
@@ -289,6 +289,17 @@ function BrowserPage() {
     [401, 403].includes((statusQuery.error as { status?: number } | null)?.status ?? 0);
 
   useEffect(() => {
+    if (!isFullscreen) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      setIsFullscreen(false);
+    };
+    window.addEventListener('keydown', handleKeyDown, true);
+    return () => window.removeEventListener('keydown', handleKeyDown, true);
+  }, [isFullscreen]);
+
+  useEffect(() => {
     const ticket = viewerTicket.data;
     if (!ticket) return;
     setViewerUrl(createBrowserSocketUrl(ticket.socketPath, ticket.ticket));
@@ -379,29 +390,6 @@ function BrowserPage() {
           <SignOutButton />
         </div>
       </header>}
-      {isFullscreen && <div className="fixed right-3 top-3 z-50 flex items-center gap-2">
-        <button
-          type="button"
-          onClick={openNewWindow}
-          className="focus-ring inline-flex h-10 items-center gap-2 rounded-md border border-[#454a4f] bg-[#111416]/90 px-3 text-sm text-[#e8ecef] shadow-lg hover:bg-[#202529] disabled:cursor-not-allowed disabled:opacity-50"
-          aria-label="Open this browser in a new Chrome window"
-          title="Open this browser in a new Chrome window"
-          data-testid="button-new-chrome-window"
-        >
-          <ExternalLink size={16} />
-          <span>New Chrome window</span>
-        </button>
-        <button
-          type="button"
-          onClick={() => setIsFullscreen(false)}
-          className="focus-ring inline-flex h-10 w-10 items-center justify-center rounded-md border border-[#454a4f] bg-[#111416]/90 text-[#e8ecef] shadow-lg hover:bg-[#202529]"
-          aria-label="Exit fullscreen"
-          title="Exit fullscreen"
-          data-testid="button-exit-fullscreen"
-        >
-          <X size={18} />
-        </button>
-      </div>}
       <section className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#080a0c]" aria-label="Remote Chromium browser">
           <div className="relative flex min-h-0 flex-1 items-center justify-center bg-[#080a0c]">
             {statusQuery.isLoading ? <div className="flex flex-col items-center gap-3 text-sm text-[#9ba4aa]" data-testid="status-loading">
