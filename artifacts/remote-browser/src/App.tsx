@@ -308,18 +308,22 @@ function BrowserPage() {
   const toggleFullscreen = () => setIsFullscreen((current) => !current);
   const openNewWindow = () => {
     setViewerError('');
-    const destination = new URL(window.location.href);
+    const destination = new URL(`${basePath}/browser`, window.location.origin);
     destination.searchParams.set('openRemoteBrowser', '1');
+    const frameHtml = createChromeOsLauncherHtml(destination.toString());
+    const frameUrl = URL.createObjectURL(new Blob([frameHtml], { type: 'text/html;charset=utf-8' }));
     const newWindow = window.open(
-      destination.toString(),
+      frameUrl,
       '_blank',
       'popup,width=1280,height=900,toolbar=yes,location=yes,resizable=yes',
     );
     if (!newWindow) {
+      URL.revokeObjectURL(frameUrl);
       setViewerError('Chrome blocked the new window. Allow pop-ups for this site, then try again.');
       return;
     }
     newWindow.focus();
+    window.setTimeout(() => URL.revokeObjectURL(frameUrl), 60000);
   };
   useEffect(() => {
     if (!autoOpenViewerRef.current || !connected || viewerTicket.isPending) return;
