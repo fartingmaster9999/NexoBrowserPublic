@@ -10,6 +10,11 @@ if ! command -v x11vnc >/dev/null 2>&1; then
   exit 1
 fi
 
+# Ubuntu's desktop may be Wayland, but this service deliberately shares an
+# isolated Xvfb display. Remove Wayland markers so x11vnc targets that display.
+unset WAYLAND_DISPLAY
+export XDG_SESSION_TYPE=x11
+
 mkdir -p "$HOME/.nexo-browser"
 if ! pgrep -f 'Xvfb :99 ' >/dev/null 2>&1; then
   nohup Xvfb :99 -screen 0 1365x900x24 -nolisten tcp \

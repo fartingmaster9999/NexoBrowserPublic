@@ -1,15 +1,23 @@
 import os from "node:os";
 import path from "node:path";
-import { mkdir } from "node:fs/promises";
+import { access, mkdir } from "node:fs/promises";
 import process from "node:process";
 import { chromium } from "playwright";
 
-if (!process.env.DISPLAY) {
+const display = ":99";
+
+try {
+  await access("/tmp/.X11-unix/X99");
+} catch {
   process.stderr.write(
-    "No virtual display is active. Run tools/local-browser/start-desktop.sh first.\n",
+    "No private Xvfb display is active. Run tools/local-browser/start-desktop.sh first.\n",
   );
   process.exit(1);
 }
+
+delete process.env.WAYLAND_DISPLAY;
+process.env.XDG_SESSION_TYPE = "x11";
+process.env.DISPLAY = display;
 
 const profileDir = path.join(os.homedir(), ".nexo-browser", "chromium-profile");
 await mkdir(profileDir, { recursive: true });
