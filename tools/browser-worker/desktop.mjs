@@ -33,7 +33,7 @@ const context = await chromium.launchPersistentContext(profileDir, {
     "--window-position=0,0",
     "--window-size=1920,1080",
     "--new-window",
-    "--start-fullscreen",
+    "--start-maximized",
   ],
 });
 

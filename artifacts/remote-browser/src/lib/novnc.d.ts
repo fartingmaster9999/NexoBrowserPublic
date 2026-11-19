@@ -7,6 +7,7 @@ declare module "@novnc/novnc" {
     focusOnClick: boolean;
     background: string;
     disconnect(): void;
+    sendKey(keysym: number, code: string, down?: boolean): void;
     addEventListener(
       type: "connect" | "disconnect" | "securityfailure",
       listener: (event: Event) => void,
