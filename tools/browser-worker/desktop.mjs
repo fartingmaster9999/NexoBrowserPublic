@@ -31,7 +31,7 @@ const context = await chromium.launchPersistentContext(profileDir, {
     "--ozone-platform=x11",
     "--disable-gpu",
     "--window-position=0,0",
-    "--window-size=1920,1080",
+    "--window-size=1366,768",
     "--new-window",
     "--start-maximized",
   ],

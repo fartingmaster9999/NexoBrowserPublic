@@ -17,7 +17,7 @@ export XDG_SESSION_TYPE=x11
 
 mkdir -p "$HOME/.nexo-browser"
 if ! pgrep -f 'Xvfb :99 ' >/dev/null 2>&1; then
-  nohup Xvfb :99 -screen 0 1920x1080x24 -nolisten tcp \
+  nohup Xvfb :99 -screen 0 1366x768x24 -nolisten tcp \
     >"$HOME/.nexo-browser/xvfb.log" 2>&1 </dev/null &
 fi
 export DISPLAY=:99
