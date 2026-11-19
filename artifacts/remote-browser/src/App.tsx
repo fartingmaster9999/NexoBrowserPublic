@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
 import {
-  Globe2, LoaderCircle, Maximize2, Monitor, Play, Plus, ShieldCheck, WifiOff, X,
+  ExternalLink, Globe2, LoaderCircle, Maximize2, Monitor, Play, ShieldCheck, WifiOff, X,
 } from 'lucide-react';
 import { Redirect, Route, Switch, useLocation, Router as WouterRouter } from 'wouter';
 import {
@@ -21,7 +21,7 @@ import {
   saveBrowserAccessToken,
   setBrowserApiOrigin,
 } from '@/lib/browserApi';
-import { NoVncViewer, type NoVncViewerHandle } from '@/components/NoVncViewer';
+import { NoVncViewer } from '@/components/NoVncViewer';
 import NotFound from '@/pages/not-found';
 
 const queryClient = new QueryClient();
@@ -231,7 +231,7 @@ function AuthPage() {
 
 function BrowserPage() {
   const queryClient = useQueryClient();
-  const viewerRef = useRef<NoVncViewerHandle>(null);
+  const autoOpenViewerRef = useRef(new URLSearchParams(window.location.search).get('openRemoteBrowser') === '1');
   const statusQuery = useGetBrowserStatus({ query: { queryKey: getGetBrowserStatusQueryKey(), refetchInterval: 6000 } });
   const viewerTicket = useCreateBrowserViewerTicket();
   const stopSession = useStopBrowserSession();
@@ -264,11 +264,28 @@ function BrowserPage() {
   };
   const toggleFullscreen = () => setIsFullscreen((current) => !current);
   const openNewWindow = () => {
-    if (viewerState !== 'connected') return;
-    if (!viewerRef.current?.openNewWindow()) {
-      setViewerError('The remote browser is not connected yet.');
+    setViewerError('');
+    const destination = new URL(window.location.href);
+    destination.searchParams.set('openRemoteBrowser', '1');
+    const newWindow = window.open(
+      destination.toString(),
+      '_blank',
+      'popup,width=1280,height=900,toolbar=yes,location=yes,resizable=yes',
+    );
+    if (!newWindow) {
+      setViewerError('Chrome blocked the new window. Allow pop-ups for this site, then try again.');
+      return;
     }
+    newWindow.focus();
   };
+  useEffect(() => {
+    if (!autoOpenViewerRef.current || !connected || viewerTicket.isPending) return;
+    autoOpenViewerRef.current = false;
+    const cleanUrl = new URL(window.location.href);
+    cleanUrl.searchParams.delete('openRemoteBrowser');
+    window.history.replaceState({}, '', cleanUrl);
+    openViewer();
+  }, [connected, viewerTicket.isPending]);
   const stop = () => stopSession.mutate(undefined, {
     onSuccess: () => {
       setViewerUrl('');
@@ -289,18 +306,17 @@ function BrowserPage() {
       {!isFullscreen && <header className="flex h-12 shrink-0 items-center justify-between border-b border-[#252a2e] px-4">
         <a href="/browser" className="flex items-center gap-2.5 text-sm font-medium" data-testid="link-browser-home"><Mark small /> Private Browser</a>
         <div className="flex items-center gap-2">
-          {viewerUrl && <button
+          <button
             type="button"
             onClick={openNewWindow}
-            disabled={viewerState !== 'connected'}
             className="focus-ring inline-flex h-8 items-center gap-2 rounded-md border border-[#343a3f] px-2.5 text-xs text-[#d5d9dc] hover:bg-[#171b1e] disabled:cursor-not-allowed disabled:opacity-50"
-            aria-label="Open a new Chrome window"
-            title="Open a new Chrome window"
-            data-testid="button-new-browser-window"
+            aria-label="Open this browser in a new Chrome window"
+            title="Open this browser in a new Chrome window"
+            data-testid="button-new-chrome-window"
           >
-            <Plus size={14} />
-            <span>New window</span>
-          </button>}
+            <ExternalLink size={14} />
+            <span>New Chrome window</span>
+          </button>
           <button
             type="button"
             onClick={() => void toggleFullscreen()}
@@ -316,18 +332,17 @@ function BrowserPage() {
         </div>
       </header>}
       {isFullscreen && <div className="fixed right-3 top-3 z-50 flex items-center gap-2">
-        {viewerUrl && <button
+        <button
           type="button"
           onClick={openNewWindow}
-          disabled={viewerState !== 'connected'}
           className="focus-ring inline-flex h-10 items-center gap-2 rounded-md border border-[#454a4f] bg-[#111416]/90 px-3 text-sm text-[#e8ecef] shadow-lg hover:bg-[#202529] disabled:cursor-not-allowed disabled:opacity-50"
-          aria-label="Open a new Chrome window"
-          title="Open a new Chrome window"
-          data-testid="button-new-browser-window"
+          aria-label="Open this browser in a new Chrome window"
+          title="Open this browser in a new Chrome window"
+          data-testid="button-new-chrome-window"
         >
-          <Plus size={16} />
-          <span>New window</span>
-        </button>}
+          <ExternalLink size={16} />
+          <span>New Chrome window</span>
+        </button>
         <button
           type="button"
           onClick={() => setIsFullscreen(false)}
@@ -355,7 +370,7 @@ function BrowserPage() {
               <a href="/local-setup.html" className="focus-ring mt-5 inline-flex h-10 items-center rounded-md border border-[#343a3f] px-4 text-sm font-medium text-[#d5d9dc] hover:bg-[#171b1e]" data-testid="link-local-setup">Local setup instructions</a>
               {viewerError && <p className="mt-4 text-sm text-[#f08b83]" role="alert" data-testid="text-browser-viewer-error">{viewerError}</p>}
             </div> : viewerUrl ? <div className="absolute inset-0 h-full w-full" data-testid="browser-viewer-panel">
-              <NoVncViewer ref={viewerRef} url={viewerUrl} onState={handleViewerState} onError={handleViewerError} />
+              <NoVncViewer url={viewerUrl} onState={handleViewerState} onError={handleViewerError} />
               {viewerError && <p className="absolute bottom-3 left-3 right-3 rounded bg-[#21191a]/95 px-3 py-2 text-sm text-[#f08b83]" role="alert" data-testid="text-browser-viewer-error">{viewerError}</p>}
             </div> : <div className="flex flex-col items-center px-6 text-center" data-testid="browser-empty-view">
               {viewerTicket.isPending || viewerState === 'connecting' ? <LoaderCircle size={20} className="animate-spin text-[#aeb6bb]" /> : <Globe2 size={20} className="text-[#aeb6bb]" />}
