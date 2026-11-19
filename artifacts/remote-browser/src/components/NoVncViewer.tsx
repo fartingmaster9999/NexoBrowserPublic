@@ -29,7 +29,7 @@ export function NoVncViewer({
     onErrorRef.current("");
     const rfb = new RFB(target, url);
     rfb.scaleViewport = true;
-    rfb.clipViewport = true;
+    rfb.clipViewport = false;
     rfb.resizeSession = false;
     rfb.focusOnClick = true;
     rfb.background = "#080a0c";
@@ -61,7 +61,7 @@ export function NoVncViewer({
   return (
     <div
       ref={targetRef}
-      className="h-full min-h-[calc(100dvh-106px)] w-full overflow-hidden bg-[#080a0c] [&_canvas]:block [&_canvas]:h-full [&_canvas]:max-h-[calc(100dvh-106px)] [&_canvas]:max-w-full [&_canvas]:object-contain"
+      className="h-full w-full overflow-hidden bg-[#080a0c] [&_canvas]:block [&_canvas]:h-full [&_canvas]:max-h-full [&_canvas]:max-w-full [&_canvas]:w-full [&_canvas]:object-contain"
       aria-label="Remote Chromium desktop"
       data-testid="novnc-viewer"
     />

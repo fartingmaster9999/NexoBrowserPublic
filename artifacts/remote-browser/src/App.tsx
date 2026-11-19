@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
 import {
-  Globe2, LoaderCircle, Monitor, Play, ShieldCheck, WifiOff,
+  Globe2, LoaderCircle, Maximize2, Minimize2, Monitor, Play, ShieldCheck, WifiOff,
 } from 'lucide-react';
 import { Redirect, Route, Switch, useLocation, Router as WouterRouter } from 'wouter';
 import {
@@ -231,9 +231,11 @@ function AuthPage() {
 
 function BrowserPage() {
   const queryClient = useQueryClient();
+  const browserRootRef = useRef<HTMLElement>(null);
   const statusQuery = useGetBrowserStatus({ query: { queryKey: getGetBrowserStatusQueryKey(), refetchInterval: 6000 } });
   const viewerTicket = useCreateBrowserViewerTicket();
   const stopSession = useStopBrowserSession();
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const [viewerUrl, setViewerUrl] = useState('');
   const [viewerState, setViewerState] = useState<'idle' | 'connecting' | 'connected' | 'error'>('idle');
   const [viewerError, setViewerError] = useState('');
@@ -242,6 +244,14 @@ function BrowserPage() {
   const browserOpen = currentStatus?.browserOpen ?? false;
   const isUnauthorized =
     [401, 403].includes((statusQuery.error as { status?: number } | null)?.status ?? 0);
+
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(document.fullscreenElement === browserRootRef.current);
+    };
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+  }, []);
 
   useEffect(() => {
     const ticket = viewerTicket.data;
@@ -259,6 +269,17 @@ function BrowserPage() {
     setViewerError('');
     startViewer();
   };
+  const toggleFullscreen = async () => {
+    try {
+      if (document.fullscreenElement === browserRootRef.current) {
+        await document.exitFullscreen();
+      } else {
+        await browserRootRef.current?.requestFullscreen();
+      }
+    } catch {
+      setViewerError('Fullscreen is unavailable in this browser.');
+    }
+  };
   const stop = () => stopSession.mutate(undefined, {
     onSuccess: () => {
       setViewerUrl('');
@@ -275,14 +296,26 @@ function BrowserPage() {
   }, []);
 
   return (
-    <main className="min-h-[100dvh] bg-[#0b0d0f] text-[#e8ecef]">
+    <main ref={browserRootRef} className="flex h-[100dvh] flex-col overflow-hidden bg-[#0b0d0f] text-[#e8ecef]">
       <header className="flex h-12 items-center justify-between border-b border-[#252a2e] px-4">
         <a href="/browser" className="flex items-center gap-2.5 text-sm font-medium" data-testid="link-browser-home"><Mark small /> Private Browser</a>
-        <SignOutButton />
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => void toggleFullscreen()}
+            className="focus-ring inline-flex h-8 items-center gap-2 rounded-md border border-[#343a3f] px-2.5 text-xs text-[#d5d9dc] hover:bg-[#171b1e]"
+            aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+            title={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+            data-testid="button-fullscreen"
+          >
+            {isFullscreen ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
+            <span className="hidden sm:inline">{isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}</span>
+          </button>
+          <SignOutButton />
+        </div>
       </header>
-      <div className="p-2 sm:p-3">
-        <section className="overflow-hidden rounded-md border border-[#292e32] bg-[#111416]" aria-label="Remote Chromium browser">
-          <div className="flex min-h-[calc(100dvh-106px)] items-center justify-center bg-[#080a0c]">
+      <section className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#080a0c]" aria-label="Remote Chromium browser">
+          <div className="relative flex min-h-0 flex-1 items-center justify-center bg-[#080a0c]">
             {statusQuery.isLoading ? <div className="flex flex-col items-center gap-3 text-sm text-[#9ba4aa]" data-testid="status-loading">
               <LoaderCircle size={20} className="animate-spin" /><span>Checking local browser…</span>
             </div> : statusQuery.isError ? <div className="flex max-w-md flex-col items-center px-6 text-center" data-testid="status-error">
@@ -296,7 +329,7 @@ function BrowserPage() {
               <p className="mt-2 max-w-lg text-sm leading-6 text-[#9ba4aa]">Start the browser desktop and local service on your computer, then start the Cloudflare Tunnel. This page will connect directly to your computer instead of relaying the browser through Render.</p>
               <a href="/local-setup.html" className="focus-ring mt-5 inline-flex h-10 items-center rounded-md border border-[#343a3f] px-4 text-sm font-medium text-[#d5d9dc] hover:bg-[#171b1e]" data-testid="link-local-setup">Local setup instructions</a>
               {viewerError && <p className="mt-4 text-sm text-[#f08b83]" role="alert" data-testid="text-browser-viewer-error">{viewerError}</p>}
-            </div> : viewerUrl ? <div className="relative h-[calc(100dvh-106px)] w-full" data-testid="browser-viewer-panel">
+            </div> : viewerUrl ? <div className="absolute inset-0 h-full w-full" data-testid="browser-viewer-panel">
               <NoVncViewer url={viewerUrl} onState={handleViewerState} onError={handleViewerError} />
               {viewerError && <p className="absolute bottom-3 left-3 right-3 rounded bg-[#21191a]/95 px-3 py-2 text-sm text-[#f08b83]" role="alert" data-testid="text-browser-viewer-error">{viewerError}</p>}
             </div> : <div className="flex flex-col items-center px-6 text-center" data-testid="browser-empty-view">
@@ -312,7 +345,7 @@ function BrowserPage() {
               </button>
             </div>}
           </div>
-          <div className="flex min-h-9 items-center justify-between gap-3 border-t border-[#292e32] px-3 text-xs text-[#828c92]">
+          <div className="flex h-9 shrink-0 items-center justify-between gap-3 border-t border-[#292e32] px-3 text-xs text-[#828c92]">
             <span className="flex min-w-0 items-center gap-2 truncate" data-testid="text-page-title"><Globe2 size={13} className="shrink-0" />{currentStatus?.pageTitle || 'Chromium browser'}</span>
             <div className="flex items-center gap-3">
               {viewerUrl && <span>{viewerState === 'connected' ? 'Connected' : viewerState === 'error' ? 'Disconnected' : 'Connecting…'}</span>}
@@ -320,8 +353,7 @@ function BrowserPage() {
               <span className="shrink-0">{connected ? 'Local computer online' : 'Local computer offline'}</span>
             </div>
           </div>
-        </section>
-      </div>
+      </section>
     </main>
   );
 }
